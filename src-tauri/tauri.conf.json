@@ -1,0 +1,25 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "작은 창틀 Tauri",
+  "mainBinaryName": "little-windowsill",
+  "version": "0.6.32",
+  "identifier": "studio.windowsill.tauri",
+  "build": {
+    "beforeBuildCommand": "npm run prepare:tauri",
+    "beforeDevCommand": "npm run prepare:tauri",
+    "frontendDist": "../renderer"
+  },
+  "app": {
+    "windows": [],
+    "withGlobalTauri": true
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": ["../assets/brand/windowsill.ico"],
+    "resources": { "runtime/": "runtime/" },
+    "windows": {
+      "nsis": { "compression": "lzma", "languages": ["Korean", "English"] }
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "identifier": "windowsill-desktop",
+  "description": "Subscribe to native events for the two local app windows.",
+  "windows": ["manager", "widget"],
+  "permissions": ["core:event:allow-listen", "core:event:allow-unlisten"]
+}

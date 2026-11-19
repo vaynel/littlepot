@@ -1,0 +1,1 @@
+const {parentPort,workerData}=require('node:worker_threads');try{const {manifest,digest,png,font}=require('./theme-package.cjs').validatePackage(workerData);parentPort.postMessage({manifest,digest,png,font});}catch(e){parentPort.postMessage({error:e.message});}

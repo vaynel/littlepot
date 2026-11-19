@@ -1,0 +1,10 @@
+{
+  "productName": "작은 창틀 Rust",
+  "mainBinaryName": "little-windowsill-rust",
+  "identifier": "studio.windowsill.rust",
+  "build": {
+    "beforeBuildCommand": "npm run prepare:rust",
+    "beforeDevCommand": "npm run prepare:rust"
+  },
+  "bundle": { "resources": [] }
+}

@@ -1,0 +1,49 @@
+[package]
+name = "little-windowsill"
+version = "0.6.32"
+edition = "2021"
+
+[features]
+rust-backend = ["dep:notify", "dep:rusqlite", "dep:sha2", "dep:uuid", "dep:chrono", "dep:similar", "dep:git2", "dep:base64", "dep:crc32fast", "dep:flate2", "dep:libc", "dep:regex", "dep:reqwest", "dep:tempfile", "dep:unicode-normalization", "dep:windows-sys"]
+
+[build-dependencies]
+tauri-build = { version = "2.7", features = [] }
+
+[dependencies]
+base64 = { version = "0.22", optional = true }
+dunce = "1"
+chrono = { version = "0.4", optional = true }
+crc32fast = { version = "1", optional = true }
+flate2 = { version = "1", optional = true }
+git2 = { version = "0.21", default-features = false, features = ["vendored-libgit2"], optional = true }
+libc = { version = "0.2", optional = true }
+notify = { version = "8", optional = true }
+regex = { version = "1", optional = true }
+reqwest = { version = "0.13", default-features = false, features = ["blocking", "native-tls-no-alpn"], optional = true }
+rusqlite = { version = "0.43", features = ["bundled"], optional = true }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = { version = "0.10", optional = true }
+similar = { version = "2", optional = true }
+tauri = { version = "2.12", features = ["tray-icon", "devtools"] }
+tauri-plugin-dialog = { version = "2.8", default-features = false }
+tauri-plugin-opener = "2.7"
+tauri-plugin-single-instance = "2.5"
+tauri-runtime = "2.12"
+tempfile = { version = "3", optional = true }
+tokio = { version = "1", features = ["sync"] }
+unicode-normalization = { version = "0.1", optional = true }
+uuid = { version = "1", features = ["v4"], optional = true }
+
+[target.'cfg(windows)'.dependencies]
+tauri-winrt-notification = "0.8"
+windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem"], optional = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+tauri-plugin-notification = "2.8"
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+opt-level = "s"
+strip = true

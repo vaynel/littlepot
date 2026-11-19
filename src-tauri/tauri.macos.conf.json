@@ -1,0 +1,8 @@
+{
+  "bundle": {
+    "resources": [],
+    "targets": ["app", "dmg"],
+    "icon": ["../assets/brand/windowsill.icns", "../assets/brand/windowsill-256.png"],
+    "macOS": { "minimumSystemVersion": "12.0" }
+  }
+}

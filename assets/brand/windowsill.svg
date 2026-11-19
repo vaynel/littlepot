@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <title>작은 창틀 — 창가의 새싹</title>
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="#385747"/>
+  <path d="M57 187V70a16 16 0 0 1 16-16h110a16 16 0 0 1 16 16v117" fill="none" stroke="#F5F1DD" stroke-width="13" stroke-linecap="round"/>
+  <path d="M58 99h140M128 56v43" fill="none" stroke="#F5F1DD" stroke-width="10"/>
+  <path d="M128 163v-27" fill="none" stroke="#BADA91" stroke-width="9" stroke-linecap="round"/>
+  <path d="M128 145c-24 1-39-13-38-32 23-2 39 11 38 32Z" fill="#BADA91"/>
+  <path d="M128 136c0-24 16-39 39-37 1 22-14 38-39 37Z" fill="#D5E8AB"/>
+  <path d="M105 163h46l-6 27h-34Z" fill="#DCA978"/>
+  <path d="M103 162h50" fill="none" stroke="#E8BA8C" stroke-width="9" stroke-linecap="round"/>
+  <path d="M49 196h158" fill="none" stroke="#F5F1DD" stroke-width="14" stroke-linecap="round"/>
+</svg>

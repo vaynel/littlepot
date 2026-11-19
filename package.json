@@ -1,0 +1,28 @@
+{
+  "name": "little-windowsill",
+  "version": "0.6.32",
+  "private": true,
+  "description": "파일을 정리하면 자라는 작은 도트 창틀",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "start": "npm run start:rust",
+    "build": "npm run build:rust",
+    "start:node": "tauri dev",
+    "build:node": "tauri build",
+    "prepare:tauri": "node scripts/prepare-tauri.cjs",
+    "prepare:rust": "node scripts/prepare-tauri.cjs --rust",
+    "start:rust": "tauri dev --features rust-backend --config src-tauri/tauri.rust.json",
+    "build:rust": "tauri build --features rust-backend --config src-tauri/tauri.rust.json"
+  },
+  "dependencies": {
+    "koffi": "3.3.1"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.12.6"
+  },
+  "optionalDependencies": {
+    "node-win-x64": "24.22.1"
+  }
+}
