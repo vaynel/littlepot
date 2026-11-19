@@ -121,6 +121,7 @@ fn uses_archive(method: &str, command: Option<&str>) -> bool {
                     | "storage"
                     | "storage-pick-directory"
                     | "files"
+                    | "folder-column-files"
                     | "browseFolders"
                     | "attention-files"
                     | "timeline"
@@ -998,6 +999,11 @@ impl Backend {
                 Ok(json!(true))
             }
             "files" => Ok(json!(core.store.list(text(a)?, b == "unmanaged")?)),
+            "folder-column-files" => Ok(json!(core.store.folder_column_files(
+                text(a)?,
+                Path::new(text(b)?),
+                c == "direct"
+            )?)),
             "file-management" => {
                 core.store.manage_file(text(a)?, text(b)?)?;
                 self.changed();
@@ -1504,7 +1510,7 @@ impl Core {
         )?.pop().unwrap_or_else(|| json!({}));
         Ok(
             json!({"plants":plants,"days":days,"ops":ops,"tasks":{"counts":task_counts,"items":tasks,"limit":100},"total":total,"today":total,"blocked":self.blocked()?,"busy":false,"progress":null,"settings":settings,
-            "tutorial":self.store.get("tutorial",Value::Null)?,"organize":organizer::jobs(&self.store,None)?,"aftercare":{"counts":archive_counts,"items":archive},"themes":themes::summary(&self.store)?,"managed":{"ready":true,"roots":roots,"storage":storage,"budget":storage["budget"],"error":"","deleting":false,"recordJob":self.store.get("recordJob",Value::Null)?},
+            "tutorial":self.store.get("tutorial",Value::Null)?,"organize":organizer::jobs(&self.store,None)?,"aftercare":{"counts":archive_counts,"items":archive},"themes":themes::summary(&self.store)?,"managed":{"folderColumns":true,"ready":true,"roots":roots,"storage":storage,"budget":storage["budget"],"error":"","deleting":false,"recordJob":self.store.get("recordJob",Value::Null)?},
             "guide":self.store.get("guide",json!({"step":0,"status":"not_started","version":1}))?,"native":true,"platform":if cfg!(windows) {"win32"} else {"darwin"},"canClickThrough":self.tray_ready,"version":version}),
         )
     }

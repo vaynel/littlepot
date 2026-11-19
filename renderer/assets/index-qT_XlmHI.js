@@ -1373,15 +1373,15 @@ const Vn = {
     ja: "階層別にフォルダーを探す",
     "zh-CN": "按文件夹层级浏览",
   },
-  "{1}단계 {2}": {
-    en: "Level {1} {2}",
-    ja: "{1}階層 {2}",
-    "zh-CN": "第{1}层 {2}",
+  "{0}단계 {1}": {
+    en: "Level {0} {1}",
+    ja: "{0}階層 {1}",
+    "zh-CN": "第{0}层 {1}",
   },
-  "폴더 {3} · 파일 {4}": {
-    en: "{3} folders · {4} files",
-    ja: "フォルダー{3} · ファイル{4}",
-    "zh-CN": "{3}个文件夹 · {4}个文件",
+  "폴더 {0} · 파일 {1}": {
+    en: "{0} folders · {1} files",
+    ja: "フォルダー{0} · ファイル{1}",
+    "zh-CN": "{0}个文件夹 · {1}个文件",
   },
   "비어 있는 폴더예요.": {
     en: "This folder is empty.",
@@ -4396,6 +4396,12 @@ const Vn = {
     en: "Could not load the list. Please try again.",
     ja: "一覧を読み込めませんでした。もう一度確認してください。",
     "zh-CN": "无法加载列表，请重试。",
+  },
+  "파일 상세를 불러오는 중": {
+    en: "Loading file details", ja: "ファイルの詳細を読み込み中", "zh-CN": "正在加载文件详情",
+  },
+  "파일 목록을 불러오는 중": {
+    en: "Loading files", ja: "ファイル一覧を読み込み中", "zh-CN": "正在加载文件列表",
   },
   "표시 기준": {
     en: "About this list",
@@ -10039,7 +10045,26 @@ let Ke = null,
 function $i(e, t) {
   (za(e), (ya = t));
 }
+let browserRequest = 0;
+let browserListing = null;
+let detailRequest = 0;
+let openingFile = null;
+let preparedTimeline = null;
+function activeFileRequest() {
+  return openingFile?.request === detailRequest && openingFile.root === le ? openingFile : null;
+}
+let columnFiles = new Map();
+let columnReads = new Map();
+let columnErrors = new Set();
 function za(e) {
+  ++browserRequest;
+  ++detailRequest;
+  browserListing = null;
+  columnFiles = new Map();
+  columnReads = new Map();
+  columnErrors = new Set();
+  Ht = [];
+  Sn = [];
   (Rn(),
     (ya = ""),
     (Se = "managed"),
@@ -10080,34 +10105,78 @@ async function ki(e, t) {
     !(!t.native || !le || !W.manage))
   ) {
     if (e === "files") {
-      if ((await ri(t, le), Ws())) return;
-      if (
-        ((Ht =
-          Se === "attention"
-            ? await W.manage("attention-files", le)
-            : await W.manage(
-                "files",
-                le,
-                Se === "unmanaged" ? "unmanaged" : "managed",
-              )),
-        Se === "missing" &&
-          (Ht = Ht.filter(
-            (c) => c.status === "deleted" || c.status === "replaced",
-          )),
-        (Sn = await W.manage("browseFolders", le)),
-        Sn.includes(qe) || (qe = n.find((c) => c.id === le).path),
-        ya)
-      ) {
-        const c = ya;
-        ya = "";
-        const u = Ht.find((d) => d.id === c);
-        u &&
-          ((qe = u.path.replace(/[\\/][^\\/]+$/, "")),
-          (J = await W.manage("timeline", c)));
-      } else J && (J = await W.manage("timeline", J.file.id));
+      const root = n.find(item => item.id === le);
+      await ri(t, root.id);
+      if (Ws() || root.id !== le) return;
+      const request = ++browserRequest;
+      const folders = await W.manage("browseFolders", root.id);
+      if (request !== browserRequest || root.id !== le) return;
+      Sn = folders;
+      if (!Sn.includes(qe)) qe = root.path;
+      const linkedFile = ya;
+      const file = linkedFile || J?.file.id;
+      ya = "";
+      if (file) {
+        const detail = detailRequest;
+        const previous = J;
+        const timeline = await W.manage("timeline", file);
+        if (request !== browserRequest || root.id !== le) return;
+        if (detail === detailRequest && J === previous && timeline?.file.root === root.id) {
+          J = timeline;
+          if (linkedFile) qe = vn(timeline.file.path);
+        }
+      }
+      await loadBrowserListing();
     }
     e === "rules" && (Pe = await W.manage("analyze", le));
   }
+}
+async function loadBrowserListing() {
+  const request = ++browserRequest;
+  const root = le;
+  const view = Se;
+  const scoped = !!Ct.managed.folderColumns && view === "managed" && !Ve.trim();
+  const folder = qe;
+  let rows = scoped
+    ? await W.manage("folder-column-files", root, folder)
+    : view === "attention"
+      ? await W.manage("attention-files", root)
+      : await W.manage("files", root, view === "unmanaged" ? "unmanaged" : "managed");
+  if (request !== browserRequest || root !== le || view !== Se) return;
+  if (view === "missing") rows = rows.filter(row => ["deleted", "replaced"].includes(row.status));
+  Ht = rows;
+  browserListing = { root, view, scoped, folder };
+  columnReads = new Map();
+  columnFiles = new Map();
+  columnErrors = new Set();
+  if (scoped) {
+    const base = Ct.managed.roots.find(item => item.id === root).path;
+    for (const path of browserPath(base, folder)) columnFiles.set(path, []);
+    for (const row of rows) columnFiles.get(vn(row.path))?.push(row);
+  }
+}
+function readFolderColumn(path) {
+  const files = columnFiles;
+  const reads = columnReads;
+  if (files.has(path)) return Promise.resolve(files.get(path));
+  if (reads.has(path)) return reads.get(path);
+  const root = le;
+  const promise = W.manage("folder-column-files", root, path, "direct").then(rows => {
+    if (files === columnFiles && root === le) {
+      files.set(path, rows);
+      if (files.size > 16) {
+        const base = Ct.managed.roots.find(item => item.id === root)?.path;
+        const visible = new Set(browserPath(base, qe));
+        for (const key of files.keys()) {
+          if (files.size <= 16) break;
+          if (key !== path && !visible.has(key)) files.delete(key);
+        }
+      }
+    }
+    return rows;
+  }).finally(() => reads.delete(path));
+  reads.set(path, promise);
+  return promise;
 }
 function managedFolderStatus(root, total, stored) {
   if (!root.active || root.status === "paused") return ["paused", "관리 중단"];
@@ -10235,10 +10304,15 @@ function Ii(e, t) {
   if (!((d = t.managed) != null && d.roots.length)) return n + o + Ei();
   const i = t.managed.roots.find((r) => r.id === le) || t.managed.roots[0];
   if (e === "rules") return n + o + Si(t, i) + Bi(i);
-  const workspace = Ws() ? hi() : m`<div class="file-workbench ${J ? "has-detail" : ""} ${J && dt ? "has-history" : ""}"><section class="panel workspace-panel folder-panel"><label class="search-label" for="ws-search">파일 검색</label><input id="ws-search" value="${M(Ve)}" placeholder="관리 폴더 전체에서 파일명·경로 검색">${Oi()}${Mi(i)}</section>${J ? Pi() : ""}</div>`;
+  const hasDetail = !!(J || activeFileRequest());
+  const workspace = Ws() ? hi() : m`<div class="file-workbench ${hasDetail ? "has-detail" : ""} ${J && dt ? "has-history" : ""}"><section class="panel workspace-panel folder-panel"><label class="search-label" for="ws-search">파일 검색</label><input id="ws-search" value="${M(Ve)}" placeholder="관리 폴더 전체에서 파일명·경로 검색">${Oi()}${Mi(i)}</section>${hasDetail ? Pi() : ""}</div>`;
   return `${n}${o}<div class="managed-files-layout">${managedFolderPicker(t)}<div class="managed-files-content">${managedFolderHeader(i)}${wa ? Fi(t, i, !0) : ""}${workspace}</div></div>`;
 }
-const vn = (e) => e.slice(0, Math.max(e.lastIndexOf("/"), e.lastIndexOf("\\")));
+function vn(path) {
+  const i = Ct?.platform === "darwin" ? path.lastIndexOf("/") : Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+  if (i === 0 || (i === 2 && path[1] === ":")) return path.slice(0, i + 1);
+  return path.slice(0, Math.max(0, i));
+}
 function Oi() {
   return `<div class="workspace-actions file-view-tabs" aria-label="${a("파일 관리 상태")}">${[
     ["managed", "관리 중"],
@@ -10260,24 +10334,110 @@ function Oi() {
 }
 function us(e) {
   const t = it(e.path),
-    s = (J == null ? void 0 : J.file.id) === e.id;
+    s = (activeFileRequest()?.id || J?.file.id) === e.id;
   return Se === "attention"
     ? `<${e.id ? 'button type="button"' : "div"} class="managed-row attention-row" ${e.id ? `data-action="ws-timeline" data-file="${M(e.id)}" aria-pressed="${s}"` : ""}><span class="file-summary"><strong>${M(t)}</strong><small>${M(e.path)}</small><span class="attention-reason">${M(a(e.reason))}</span></span><span class="file-state">${a(e.kind === "directory" ? "폴더 범위" : e.management === "off" ? "관리 해제" : e.reason === "자동 보관 제외 규칙에 해당해요." ? "규칙 제외" : "미보관")}</span></${e.id ? "button" : "div"}>`
     : m`<button type="button" class="managed-row browser-file ${s ? "selected" : ""}" data-action="ws-timeline" data-file="${M(e.id)}" aria-pressed="${s}" aria-label="${M(t)} · ${e.version_count}개 버전 · ${M(a(e.management === "off" ? "관리 해제" : nn[e.status] || e.status))}" title="${M(e.path)}${e.error ? " — " + M(e.error) : ""}"><svg class="file-glyph" viewBox="0 0 20 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M3 2h9l5 5v15H3zM12 2v6h5M6 12h8M6 16h8"/></svg><span class="file-summary"><strong>${M(t)}</strong>${Ve || Se !== "managed" ? `<small>${M(e.path)}</small>` : ""}</span>${e.status !== "stored" || e.management === "off" ? `<span class="file-state">${M(a(e.management === "off" ? "관리 해제" : nn[e.status] || e.status))}</span>` : ""}<span class="file-version">${e.status === "forgotten" ? a("기록 없음") : e.version_count ? "v" + e.version_count : a("대기")}</span></button>`;
 }
+function browserPath(base, folder) {
+  const path = [];
+  for (let p = folder; p && base && p.length > base.length; p = vn(p)) path.unshift(p);
+  return [base, ...path];
+}
+function browserBreadcrumbs(t) {
+  return m`<nav class="folder-breadcrumbs" aria-label="현재 폴더 경로">${t.map((i, c) => H("folder", M(c ? it(i) : it(t[0]) || t[0]), `data-path="${M(i)}" aria-current="${c === t.length - 1 ? "location" : "false"}"`)).join('<span aria-hidden="true">›</span>')}</nav>`;
+}
+function columnState(path) {
+  if (!browserListing?.scoped || columnFiles.has(path)) return "ready";
+  return columnErrors.has(path) ? "error" : "loading";
+}
+function updateFolderColumns(root, moveToSelection) {
+  const list = document.querySelector(".folder-columns");
+  if (!list) return;
+  const paths = browserPath(root.path, qe);
+  gs = "";
+  if (moveToSelection) {
+    const nav = list.previousElementSibling;
+    const hadFocus = nav.contains(document.activeElement);
+    nav.outerHTML = browserBreadcrumbs(paths);
+    if (hadFocus) list.previousElementSibling.lastElementChild?.focus({ preventScroll: true });
+    const workbench = list.closest(".file-workbench");
+    workbench.querySelector("#version-details")?.remove();
+    workbench.classList.remove("has-detail", "has-history");
+    const file = list.querySelector(".browser-file.selected");
+    if (file) {
+      file.classList.remove("selected");
+      file.setAttribute("aria-pressed", "false");
+    }
+  }
+  for (const [depth, path] of paths.entries()) {
+    const column = list.children[depth];
+    const current = depth === paths.length - 1;
+    const next = paths[depth + 1];
+    if (column?.dataset.path !== path) {
+      while (list.children.length > depth) list.lastElementChild.remove();
+      list.insertAdjacentHTML("beforeend", browserColumn(path, depth, next, current));
+      continue;
+    }
+    if (column.dataset.state !== columnState(path)) {
+      column.outerHTML = browserColumn(path, depth, next, current);
+      continue;
+    }
+    column.classList.toggle("current", current);
+    const old = column.querySelector(".folder-entry.selected");
+    if (old && old.dataset.path !== next) {
+      old.classList.remove("selected");
+      old.setAttribute("aria-pressed", "false");
+    }
+    if (next && old?.dataset.path !== next) {
+      const selected = column.querySelector(`.folder-entry[data-path="${CSS.escape(next)}"]`);
+      selected?.classList.add("selected");
+      selected?.setAttribute("aria-pressed", "true");
+    }
+  }
+  while (list.children.length > paths.length) list.lastElementChild.remove();
+  if (moveToSelection) list.scrollLeft = list.scrollWidth;
+}
+async function selectBrowserFolder(path) {
+  const root = Ct.managed.roots.find(item => item.id === le);
+  if (!root) return;
+  ++detailRequest;
+  ++browserRequest;
+  qe = path;
+  J = null;
+  columnErrors.delete(path);
+  if (browserListing?.root !== le || browserListing.view !== Se) {
+    await Ne();
+    return;
+  }
+  browserListing.folder = path;
+  updateFolderColumns(root, true);
+  if (!browserListing.scoped || columnFiles.has(path)) return;
+  const cache = columnFiles;
+  try {
+    await readFolderColumn(path);
+  } catch {
+    if (cache === columnFiles) columnErrors.add(path);
+  }
+  if (ie === "files" && le === root.id && browserPath(root.path, qe).includes(path) &&
+      !Ve.trim() && Se === "managed" && cache === columnFiles)
+    updateFolderColumns(root, false);
+}
+function browserColumn(i, c, next, current) {
+  const u = Sn.filter(path => path !== i && vn(path) === i);
+  const d = browserListing?.scoped ? columnFiles.get(i) || [] : Ht.filter(row => vn(row.path) === i);
+  const state = columnState(i);
+  return m`<section class="folder-column ${current ? "current" : ""}" data-path="${M(i)}" data-state="${state}" aria-busy="${state === "loading"}" aria-label="${m`${c + 1}단계 ${M(it(i))}`}"><header><small>${state === "ready" ? m`폴더 ${u.length} · 파일 ${d.length}` : M(it(i))}</small></header><div class="folder-entries">${u.map((r) => `<button class="folder-entry ${next === r ? "selected" : ""}" data-action="ws-folder" data-path="${M(r)}" aria-pressed="${next === r}" title="${M(r)}"><span aria-hidden="true">▸</span><span>${M(it(r))}</span><span aria-hidden="true">›</span></button>`).join("")}${d.map(us).join("")}${state !== "ready" ? `<p class="folder-empty" role="status">${a(state === "loading" ? "파일 목록을 불러오는 중" : "목록을 불러오지 못했어요. 다시 확인해 주세요.")}</p>` : !u.length && !d.length ? a('<p class="folder-empty">비어 있는 폴더예요.</p>') : ""}</div></section>`;
+}
 function Mi(e) {
-  const t = [e.path];
-  let s = qe;
-  const n = [];
-  for (; s && s !== e.path && s.length > e.path.length;)
-    (n.unshift(s), (s = vn(s)));
-  t.push(...n);
-  const o = m`<nav class="folder-breadcrumbs" aria-label="현재 폴더 경로">${t.map((i, c) => H("folder", M(c ? it(i) : it(e.path) || e.path), `data-path="${M(i)}" aria-current="${c === t.length - 1 ? "location" : "false"}"`)).join('<span aria-hidden="true">›</span>')}</nav>`;
+  const t = browserPath(e.path, qe);
   if (Ve.trim() || Se !== "managed") {
-    const i = Ht.filter((f) => cs(f.path).includes(cs(Ve.trim()))).sort(
+    const query = cs(Ve.trim());
+    const collator = new Intl.Collator(Fe(), { numeric: true });
+    const i = Ht.filter((f) => !query || cs(f.path).includes(query)).sort(
         (f, b) =>
-          f.path.localeCompare(b.path, Fe(), { numeric: !0 }) ||
-          f.id.localeCompare(b.id),
+          collator.compare(f.path, b.path) ||
+          String(f.id || "").localeCompare(String(b.id || "")),
       ),
       c = Math.max(1, Math.ceil(i.length / Ut));
     pe = Math.min(Math.max(1, pe), c);
@@ -10289,17 +10449,9 @@ function Mi(e) {
       );
     return m`<p id="search-result-count" class="search-result-count" role="status" tabindex="-1">${a(Ve.trim() ? "전체 하위 폴더 검색 결과" : "관리 상태별 파일 목록")} · ${i.length}개${i.length ? m` · ${u + 1}–${u + d.length} 표시` : ""}</p><div class="managed-list">${d.map(us).join("") || a("<p>검색 결과가 없어요.</p>")}</div>${i.length ? m`<nav class="search-pagination" aria-label="검색 결과 페이지">${H("page", a("이전"), `data-page="${pe - 1}" ${pe === 1 ? "disabled" : ""}`)}${r.map((f) => H("page", String(f), m`data-page="${f}" aria-label="${f}페이지" ${f === pe ? 'aria-current="page"' : ""}`, f === pe)).join("")}${H("page", a("다음"), `data-page="${pe + 1}" ${pe === c ? "disabled" : ""}`)}<small>${pe} / ${c} 페이지 · ${Ut}개씩</small></nav>` : ""}`;
   }
-  return (
-    m`<div class="folder-view-label">폴더별 보기</div>` +
-    o +
-    m`<div class="folder-columns" aria-label="폴더 깊이별 탐색">${t
-      .map((i, c) => {
-        const u = Sn.filter((r) => r !== i && vn(r) === i),
-          d = Ht.filter((r) => vn(r.path) === i);
-        return m`<section class="folder-column ${c === t.length - 1 ? "current" : ""}" aria-label="${c + 1}단계 ${M(it(i))}"><header><small>폴더 ${u.length} · 파일 ${d.length}</small></header><div class="folder-entries">${u.map((r) => `<button class="folder-entry ${t[c + 1] === r ? "selected" : ""}" data-action="ws-folder" data-path="${M(r)}" aria-pressed="${t[c + 1] === r}" title="${M(r)}"><span aria-hidden="true">▸</span><span>${M(it(r))}</span><span aria-hidden="true">›</span></button>`).join("")}${d.map(us).join("")}${!u.length && !d.length ? a('<p class="folder-empty">비어 있는 폴더예요.</p>') : ""}</div></section>`;
-      })
-      .join("")}</div>`
-  );
+  return m`<div class="folder-view-label">폴더별 보기</div>` + browserBreadcrumbs(t) +
+    m`<div class="folder-columns" aria-label="폴더 깊이별 탐색">${t.map((path, depth) =>
+      browserColumn(path, depth, t[depth + 1], depth === t.length - 1)).join("")}</div>`;
 }
 function Ri(e) {
   const t = e.file.management === "off",
@@ -10325,6 +10477,8 @@ function Di(e, t) {
   return `<section class="record-delete"><div><h3>${a("관리 폴더 기록 삭제")}</h3><p>${a("실제 파일과 폴더는 그대로 두고, 앱의 관리 기록과 보관 버전을 삭제해요.")}</p></div>${H("ask-delete-records", a("관리 기록 삭제"), `id="root-delete-button" data-kind="${e}"`)}</section>`;
 }
 function Pi() {
+  const pending = activeFileRequest();
+  if (pending) return m`<section class="panel workspace-panel file-details minimal-detail" id="version-details" aria-label="파일 상세" aria-busy="true"><div class="minimal-detail-heading"><h2>${M(pending.name)}</h2>${H("close-detail", "×", a('aria-label="상세 닫기" title="상세 닫기"'))}</div><p class="subtle" role="status">${a("파일 상세를 불러오는 중")}</p></section>`;
   const e = J,
     t = e.versions[0],
     s = Ct.managed.roots.find((i) => i.id === e.file.root),
@@ -10351,6 +10505,26 @@ function Bi(e) {
         m`<section class="panel workspace-panel"><h2>적용 중인 규칙</h2>${Pe.rules.length ? Pe.rules.map((t) => m`<div class="managed-row"><div><strong>${M(t.template)}</strong><small>${M(t.scope)} · 기준 v${t.revision}</small></div>${H("disable-rule", a("사용 중지"), `data-rule="${M(t.id)}"`)}</div>`).join("") : a("<p>발견한 패턴을 승인하거나 내 규칙을 입력해 보세요.</p>")}<details data-disclosure="rule-editor"><summary>내 규칙 직접 만들기</summary><label for="ws-scope">적용할 하위 폴더 (전체 경로)</label><input id="ws-scope" value="${M(xa || e.path)}"><label for="ws-template">파일명 형식</label><input id="ws-template" value="${M(Pn)}"><p class="subtle">{텍스트} · {거래처} · {문서종류} · {날짜} · {번호} 사용 가능. 날짜는 YYYY-MM-DD 또는 YYYYMMDD예요.</p>${H("approve-custom", a("이 범위의 내 규칙으로 사용"), "", !0)}</details></section>${oi(Pe)}<section class="panel workspace-panel"><h2>학습한 정리 습관</h2><p>성공한 목적지 선택을 반영해요. 같은 내용의 반복 복사는 학습 근거를 늘리지 않아요.</p>${Pe.habits.map((t) => m`<p><code>${M(t.pattern)}</code><small>→ ${M(t.folder)} · 근거 가중치 ${t.count.toFixed(1)}</small></p>`).join("") || a("<p>아직 학습한 선택이 없어요.</p>")}${H("reset-learning", a("이 루트 추천 학습 초기화"))}<p class="subtle">파일·버전·직접 만든 이름 규칙은 유지돼요.</p></section>`
     : a("<p>이름을 분석하고 있어요.</p>");
 }
+function updateFileDetailPanel(fileId) {
+  const workbench = document.querySelector(".file-workbench");
+  if (!workbench) return;
+  gs = "";
+  const selected = workbench.querySelector('[data-action="ws-timeline"][aria-pressed="true"]');
+  if (selected?.dataset.file !== fileId) {
+    selected?.setAttribute("aria-pressed", "false");
+    selected?.classList.remove("selected");
+    const row = workbench.querySelector(`[data-action="ws-timeline"][data-file="${CSS.escape(fileId)}"]`);
+    row?.setAttribute("aria-pressed", "true");
+    row?.classList.add("selected");
+  }
+  workbench.classList.add("has-detail");
+  workbench.classList.toggle("has-history", !!J && dt);
+  const panel = workbench.querySelector("#version-details");
+  if (panel) panel.outerHTML = Pi();
+  else workbench.insertAdjacentHTML("beforeend", Pi());
+}
+const browserActions = new Set(["ws-folder", "ws-page", "ws-timeline", "ws-toggle-history",
+  "ws-toggle-status", "ws-close-detail", "ws-root-settings", "ws-root-select", "ws-file-view"]);
 async function Hi(e, t) {
   var n, o, i, c, u, d;
   if (
@@ -10384,7 +10558,7 @@ async function Hi(e, t) {
   }
   if (s === "page") {
     const r = Number(t.dataset.page);
-    Number.isInteger(r) && r > 0 && ((pe = r), (J = null));
+    Number.isInteger(r) && r > 0 && (++detailRequest, (pe = r), (J = null));
   } else if (s === "connect") Qs(Number(t.dataset.id), t.dataset.quick === "1");
   else if (["files", "rules", "garden", "storage"].includes(s)) Xe(s);
   else if (s === "guide") ((Ke = 0), Xe("help"));
@@ -10425,12 +10599,15 @@ async function Hi(e, t) {
     ((Gs = gn), (gn = on), sn++, (Fn = !1));
   } else if (s === "demo-restore") sn > 1 && (Fn = !0);
   else if (s === "demo-close") Qa = !1;
-  else if (s === "folder") ((qe = t.dataset.path), (J = null));
+  else if (s === "folder") {
+    await selectBrowserFolder(t.dataset.path);
+    return true;
+  }
   else if (s === "file-view")
-    ((Se = t.dataset.view), (pe = 1), (J = null), (De = !1));
+    (++detailRequest, (Se = t.dataset.view), (pe = 1), (J = null), (De = !1));
   else if (s === "ask-unmanage") De = !0;
   else if (s === "cancel-unmanage") De = !1;
-  else if (s === "close-detail") ((De = !1), (J = null), ba());
+  else if (s === "close-detail") (++detailRequest, (De = !1), (J = null), ba());
   else if (s === "toggle-history") dt = !dt;
   else if (s === "toggle-status") Jt = !Jt;
   else if (s === "status-guide") ((Ke = 2), Xe("help"));
@@ -10530,10 +10707,25 @@ async function Hi(e, t) {
           return !0;
       }
       await W.manage("active", r, f);
-    } else if (s === "timeline")
-      ((J == null ? void 0 : J.file.id) !== t.dataset.file &&
-        ((De = !1), ba(), (dt = !1), (Jt = !1)),
-        (J = await W.manage("timeline", t.dataset.file)));
+    } else if (s === "timeline") {
+      const request = ++detailRequest;
+      if (J?.file.id !== t.dataset.file) ((De = !1), ba(), (dt = !1), (Jt = !1));
+      const file = t.dataset.file;
+      const prepared = preparedTimeline?.root === le && preparedTimeline.id === file ? preparedTimeline : null;
+      preparedTimeline = null;
+      J = null;
+      openingFile = { request, root: le, id: file, name: t.querySelector("strong")?.textContent || "" };
+      if (!prepared?.value) updateFileDetailPanel(file);
+      try {
+        const timeline = prepared?.value || await (prepared?.read || W.manage("timeline", file));
+        if (detailRequest !== request || ie !== "files" || openingFile?.root !== le) return true;
+        J = timeline;
+      } finally {
+        if (openingFile?.request === request) openingFile = null;
+        if (!J && request === detailRequest && ie === "files") K();
+      }
+      updateFileDetailPanel(file);
+    }
     else if (s === "open-file") await W.manage("openFile", t.dataset.file);
     else if (s === "open-folder")
       await W.manage("openFileFolder", t.dataset.file);
@@ -10562,16 +10754,16 @@ async function Hi(e, t) {
           : s === "reset-learning" &&
             (await W.manage("resetLearning", le),
             _e(a("추천 학습을 초기화했어요. 파일과 버전은 그대로예요.")));
-  if ((await Ne(), s === "page")) {
+  if (s !== "timeline" || ie !== "files") {
+    if (ie === "files" && browserActions.has(e) && s !== "root-select" && s !== "file-view") K();
+    else await Ne();
+  }
+  if (s === "page") {
     const r = document.querySelector(".search-result-count");
     r &&
       ((r.tabIndex = -1),
       r.focus({ preventScroll: !0 }),
       r.scrollIntoView({ block: "nearest", behavior: "instant" }));
-  }
-  if (s === "folder") {
-    const r = document.querySelector(".folder-columns");
-    r && (r.scrollLeft = r.scrollWidth);
   }
   if (s === "timeline") {
     const detail = document.getElementById("version-details");
@@ -10622,11 +10814,19 @@ async function Bn(e) {
     (Ve = ""),
     await Ne()),
     e.id === "ws-search" &&
-      (Ve !== e.value && ((pe = 1), (J = null)),
+      (Ve !== e.value && (++detailRequest, (pe = 1), (J = null)),
       (Ve = e.value),
       clearTimeout(Pa),
-      (Pa = setTimeout(() => {
-        Ne();
+      (Pa = setTimeout(async () => {
+        if (ie !== "files") return;
+        try {
+          if (!browserListing || browserListing.root !== le || browserListing.view !== Se ||
+              (browserListing.scoped && (Ve.trim() || browserListing.folder !== qe)))
+            await loadBrowserListing();
+          K();
+        } catch (error) {
+          ce(String(error));
+        }
       }, 180))),
     e.id === "ws-scope" && (xa = e.value),
     e.id === "ws-template" && (Pn = e.value),
@@ -11494,6 +11694,32 @@ te.addEventListener("change", (e) => {
       }
     }));
 });
+function prepareFolderColumn(button) {
+  if (ie === "files" && button?.isConnected && browserListing?.scoped && browserListing.root === le)
+    readFolderColumn(button.dataset.path).catch(() => {});
+}
+let folderHoverTimer;
+te.addEventListener("pointerover", event => {
+  const button = event.target.closest(".folder-entry");
+  if (button && !button.contains(event.relatedTarget) && !event.buttons) {
+    clearTimeout(folderHoverTimer);
+    folderHoverTimer = setTimeout(() => {
+      if (button.matches(":hover") && !columnReads.size) prepareFolderColumn(button);
+    }, 80);
+  }
+});
+te.addEventListener("pointerdown", event => {
+  if (event.button !== 0 || ie !== "files") return;
+  prepareFolderColumn(event.target.closest(".folder-entry"));
+  const file = event.target.closest('[data-action="ws-timeline"]');
+  if (!file) return;
+  const entry = { root: le, id: file.dataset.file };
+  preparedTimeline = entry;
+  entry.read = W.manage("timeline", entry.id).then(value => (entry.value = value));
+  entry.read.catch(() => { if (preparedTimeline === entry) preparedTimeline = null; });
+  setTimeout(() => { if (preparedTimeline === entry) preparedTimeline = null; }, 1000);
+});
+te.addEventListener("focusin", event => prepareFolderColumn(event.target.closest(".folder-entry")));
 te.addEventListener("click", (e) => {
   var i, c, u, d;
   const t = te.querySelector(".file-management-menu[open]");
@@ -11582,7 +11808,8 @@ te.addEventListener("click", (e) => {
       return;
     }
     if (n != null && n.startsWith("ws-")) {
-      V(() => Hi(n, s));
+      if (ie === "files" && browserActions.has(n)) Hi(n, s).catch(error => ce(String(error)));
+      else V(() => Hi(n, s));
       return;
     }
     if (n === "settings-tab") ((Ka = s.dataset.tab || "screen"), K());

@@ -145,6 +145,7 @@ impl Store {
           CREATE TABLE IF NOT EXISTS scan_folders(root TEXT NOT NULL REFERENCES roots(id),path TEXT NOT NULL,PRIMARY KEY(root,path));
           CREATE TABLE IF NOT EXISTS versions(id TEXT PRIMARY KEY,file TEXT NOT NULL REFERENCES files(id),seq INTEGER NOT NULL,hash TEXT NOT NULL,blob TEXT NOT NULL,created INTEGER NOT NULL,kind TEXT NOT NULL,UNIQUE(file,seq));
           CREATE TABLE IF NOT EXISTS events(id TEXT PRIMARY KEY,file TEXT NOT NULL REFERENCES files(id),kind TEXT NOT NULL,path TEXT NOT NULL,old_path TEXT,status TEXT NOT NULL,created INTEGER NOT NULL,metadata TEXT);
+          CREATE INDEX IF NOT EXISTS events_file_created ON events(file,created DESC);
           CREATE TABLE IF NOT EXISTS gaps(id TEXT PRIMARY KEY,root TEXT NOT NULL REFERENCES roots(id),start INTEGER NOT NULL,end INTEGER,reason TEXT NOT NULL);
           CREATE TABLE IF NOT EXISTS routing_rules(id TEXT PRIMARY KEY,root TEXT NOT NULL REFERENCES roots(id),keywords TEXT NOT NULL,extension TEXT NOT NULL,folder TEXT NOT NULL,enabled INTEGER NOT NULL,updated INTEGER NOT NULL);
           CREATE TABLE IF NOT EXISTS name_rules(id TEXT PRIMARY KEY,root TEXT NOT NULL REFERENCES roots(id),scope TEXT NOT NULL,template TEXT NOT NULL,revision INTEGER NOT NULL,active INTEGER NOT NULL,UNIQUE(root,scope));
@@ -598,6 +599,45 @@ impl Store {
             }
         }
         Ok(folders.into_iter().collect())
+    }
+
+    pub fn folder_column_files(
+        &self,
+        root: &str,
+        folder: &Path,
+        direct_only: bool,
+    ) -> Result<Vec<Value>> {
+        let base = self.root_path(root)?;
+        let relative = folder.strip_prefix(&base)?;
+        if relative
+            .components()
+            .any(|part| !matches!(part, std::path::Component::Normal(_)))
+        {
+            return Err("관리 폴더 안의 경로를 선택해 주세요.".into());
+        }
+        let mut columns = Vec::new();
+        for directory in folder.ancestors().take_while(|p| p.starts_with(&base)) {
+            // Both bounds share the directory name. Incrementing the final separator
+            // gives an exclusive upper bound for the indexed (root,path) prefix.
+            let sep = std::path::MAIN_SEPARATOR;
+            let name = directory.to_string_lossy();
+            let stem = name.trim_end_matches(sep);
+            let prefix = format!("{stem}{sep}");
+            let end = format!("{stem}{}", char::from(sep as u8 + 1));
+            columns.extend(self.rows(
+                "SELECT json_object('id',f.id,'path',f.path,'status',f.status,'version_count',
+                    (SELECT count(*) FROM versions WHERE file=f.id))
+                 FROM files f LEFT JOIN file_controls c ON c.file=f.id
+                 WHERE f.root=?1 AND f.path>=?2 AND f.path<?3
+                   AND instr(substr(f.path,length(?2)+1),?4)=0 AND COALESCE(c.state,'')!='off'
+                 ORDER BY f.path,f.status IN ('deleted','replaced'),f.observed DESC,f.id",
+                params![root, prefix, end, sep.to_string()],
+            )?);
+            if direct_only {
+                break;
+            }
+        }
+        Ok(columns)
     }
 
     pub fn list(&self, root: &str, unmanaged: bool) -> Result<Vec<Value>> {

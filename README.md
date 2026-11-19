@@ -6,6 +6,10 @@
 
 **보관 공간 → 버전 보관 위치**에서 로컬 드라이브나 폴더를 선택할 수 있습니다. 선택한 위치에 보관소를 만들고 기존 버전을 검증한 뒤 전환합니다. 원본 파일, 관리 목록, 분류 규칙과 테마는 기존 위치에 유지됩니다.
 
+## Windows에서 설치
+
+Windows x64 노트북에서는 설치 파일을 내려받아 실행하면 됩니다. [Windows x64 설치 파일 다운로드](https://raw.githubusercontent.com/vaynel/littlepot/main/downloads/windows/littlepot-x64-setup.exe)
+
 ## 개발 실행과 Windows 빌드
 
 Windows x64에서 Node.js 22.12 이상, Rust MSVC 도구 체인, Microsoft C++ Build Tools 및 WebView2가 필요합니다. Node.js는 개발과 패키징에 사용합니다. WebView2가 없는 컴퓨터에서는 NSIS 설치 프로그램이 런타임을 내려받습니다. [Tauri 개발 환경](https://v2.tauri.app/start/prerequisites/) · [Windows 배포](https://v2.tauri.app/distribute/windows-installer/)
