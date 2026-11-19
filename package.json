@@ -1,6 +1,6 @@
 {
   "name": "little-windowsill",
-  "version": "0.6.32",
+  "version": "0.6.33",
   "private": true,
   "description": "파일을 정리하면 자라는 작은 도트 창틀",
   "engines": {

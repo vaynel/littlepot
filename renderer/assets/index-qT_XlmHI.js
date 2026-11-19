@@ -1389,6 +1389,7 @@ const Vn = {
     "zh-CN": "此文件夹为空。",
   },
   "파일 상세": { en: "File details", ja: "ファイル詳細", "zh-CN": "文件详情" },
+  "파일을 선택하세요": { en: "Select a file", ja: "ファイルを選択", "zh-CN": "选择文件" },
   "버전 이력": {
     en: "Version history",
     ja: "バージョン履歴",
@@ -9975,8 +9976,6 @@ let le = "",
   Pa;
 const cs = (e) => e.normalize("NFC").toLocaleLowerCase();
 let wa = !1,
-  dt = !1,
-  Jt = !1,
   De = !1,
   Se = "managed",
   mn = !1;
@@ -10075,9 +10074,7 @@ function za(e) {
     (qe = ""),
     (J = null),
     (Ve = ""),
-    (xa = ""),
-    (dt = !1),
-    (Jt = !1));
+    (xa = ""));
 }
 function Ti(e) {
   (({ api: W, notify: _e, redraw: Ne, navigate: Xe, connect: Qs } = e),
@@ -10304,8 +10301,7 @@ function Ii(e, t) {
   if (!((d = t.managed) != null && d.roots.length)) return n + o + Ei();
   const i = t.managed.roots.find((r) => r.id === le) || t.managed.roots[0];
   if (e === "rules") return n + o + Si(t, i) + Bi(i);
-  const hasDetail = !!(J || activeFileRequest());
-  const workspace = Ws() ? hi() : m`<div class="file-workbench ${hasDetail ? "has-detail" : ""} ${J && dt ? "has-history" : ""}"><section class="panel workspace-panel folder-panel"><label class="search-label" for="ws-search">파일 검색</label><input id="ws-search" value="${M(Ve)}" placeholder="관리 폴더 전체에서 파일명·경로 검색">${Oi()}${Mi(i)}</section>${hasDetail ? Pi() : ""}</div>`;
+  const workspace = Ws() ? hi() : m`<div class="file-workbench"><section class="panel workspace-panel folder-panel"><label class="search-label" for="ws-search">파일 검색</label><input id="ws-search" value="${M(Ve)}" placeholder="관리 폴더 전체에서 파일명·경로 검색">${Oi()}${Mi(i)}</section></div>`;
   return `${n}${o}<div class="managed-files-layout">${managedFolderPicker(t)}<div class="managed-files-content">${managedFolderHeader(i)}${wa ? Fi(t, i, !0) : ""}${workspace}</div></div>`;
 }
 function vn(path) {
@@ -10357,13 +10353,12 @@ function updateFolderColumns(root, moveToSelection) {
   const paths = browserPath(root.path, qe);
   gs = "";
   if (moveToSelection) {
-    const nav = list.previousElementSibling;
+    const nav = list.parentElement.previousElementSibling;
     const hadFocus = nav.contains(document.activeElement);
     nav.outerHTML = browserBreadcrumbs(paths);
-    if (hadFocus) list.previousElementSibling.lastElementChild?.focus({ preventScroll: true });
+    if (hadFocus) list.parentElement.previousElementSibling.lastElementChild?.focus({ preventScroll: true });
     const workbench = list.closest(".file-workbench");
-    workbench.querySelector("#version-details")?.remove();
-    workbench.classList.remove("has-detail", "has-history");
+    workbench.querySelector(".file-selection-bar").outerHTML = fileSelectionBar();
     const file = list.querySelector(".browser-file.selected");
     if (file) {
       file.classList.remove("selected");
@@ -10427,7 +10422,10 @@ function browserColumn(i, c, next, current) {
   const u = Sn.filter(path => path !== i && vn(path) === i);
   const d = browserListing?.scoped ? columnFiles.get(i) || [] : Ht.filter(row => vn(row.path) === i);
   const state = columnState(i);
-  return m`<section class="folder-column ${current ? "current" : ""}" data-path="${M(i)}" data-state="${state}" aria-busy="${state === "loading"}" aria-label="${m`${c + 1}단계 ${M(it(i))}`}"><header><small>${state === "ready" ? m`폴더 ${u.length} · 파일 ${d.length}` : M(it(i))}</small></header><div class="folder-entries">${u.map((r) => `<button class="folder-entry ${next === r ? "selected" : ""}" data-action="ws-folder" data-path="${M(r)}" aria-pressed="${next === r}" title="${M(r)}"><span aria-hidden="true">▸</span><span>${M(it(r))}</span><span aria-hidden="true">›</span></button>`).join("")}${d.map(us).join("")}${state !== "ready" ? `<p class="folder-empty" role="status">${a(state === "loading" ? "파일 목록을 불러오는 중" : "목록을 불러오지 못했어요. 다시 확인해 주세요.")}</p>` : !u.length && !d.length ? a('<p class="folder-empty">비어 있는 폴더예요.</p>') : ""}</div></section>`;
+  return m`<section class="folder-column ${current ? "current" : ""}" data-path="${M(i)}" data-state="${state}" aria-busy="${state === "loading"}" aria-label="${m`${c + 1}단계 ${M(it(i))}`}"><header><strong title="${M(i)}">${M(it(i) || i)}</strong><small>${state === "ready" ? m`폴더 ${u.length} · 파일 ${d.length}` : ""}</small></header><div class="folder-entries">${u.map((r) => `<button class="folder-entry ${next === r ? "selected" : ""}" data-action="ws-folder" data-path="${M(r)}" aria-pressed="${next === r}" title="${M(r)}"><span aria-hidden="true">▸</span><span>${M(it(r))}</span><span aria-hidden="true">›</span></button>`).join("")}${d.map(us).join("")}${state !== "ready" ? `<p class="folder-empty" role="status">${a(state === "loading" ? "파일 목록을 불러오는 중" : "목록을 불러오지 못했어요. 다시 확인해 주세요.")}</p>` : !u.length && !d.length ? a('<p class="folder-empty">비어 있는 폴더예요.</p>') : ""}</div></section>`;
+}
+function fileBrowserPanes(list) {
+  return `<div class="file-browser-panes">${fileSelectionBar()}${list}</div>`;
 }
 function Mi(e) {
   const t = browserPath(e.path, qe);
@@ -10447,16 +10445,16 @@ function Mi(e) {
         { length: Math.min(5, c) },
         (f, b) => Math.max(1, Math.min(pe - 2, c - 4)) + b,
       );
-    return m`<p id="search-result-count" class="search-result-count" role="status" tabindex="-1">${a(Ve.trim() ? "전체 하위 폴더 검색 결과" : "관리 상태별 파일 목록")} · ${i.length}개${i.length ? m` · ${u + 1}–${u + d.length} 표시` : ""}</p><div class="managed-list">${d.map(us).join("") || a("<p>검색 결과가 없어요.</p>")}</div>${i.length ? m`<nav class="search-pagination" aria-label="검색 결과 페이지">${H("page", a("이전"), `data-page="${pe - 1}" ${pe === 1 ? "disabled" : ""}`)}${r.map((f) => H("page", String(f), m`data-page="${f}" aria-label="${f}페이지" ${f === pe ? 'aria-current="page"' : ""}`, f === pe)).join("")}${H("page", a("다음"), `data-page="${pe + 1}" ${pe === c ? "disabled" : ""}`)}<small>${pe} / ${c} 페이지 · ${Ut}개씩</small></nav>` : ""}`;
+    return m`<p id="search-result-count" class="search-result-count" role="status" tabindex="-1">${a(Ve.trim() ? "전체 하위 폴더 검색 결과" : "관리 상태별 파일 목록")} · ${i.length}개${i.length ? m` · ${u + 1}–${u + d.length} 표시` : ""}</p>` + fileBrowserPanes(`<div class="managed-list" data-scroll-key="${M(JSON.stringify([e.id, Se, Ve, pe, Ut]))}">${d.map(us).join("") || a("<p>검색 결과가 없어요.</p>")}</div>`) + m`${i.length ? m`<nav class="search-pagination" aria-label="검색 결과 페이지">${H("page", a("이전"), `data-page="${pe - 1}" ${pe === 1 ? "disabled" : ""}`)}${r.map((f) => H("page", String(f), m`data-page="${f}" aria-label="${f}페이지" ${f === pe ? 'aria-current="page"' : ""}`, f === pe)).join("")}${H("page", a("다음"), `data-page="${pe + 1}" ${pe === c ? "disabled" : ""}`)}<small>${pe} / ${c} 페이지 · ${Ut}개씩</small></nav>` : ""}`;
   }
   return m`<div class="folder-view-label">폴더별 보기</div>` + browserBreadcrumbs(t) +
-    m`<div class="folder-columns" aria-label="폴더 깊이별 탐색">${t.map((path, depth) =>
-      browserColumn(path, depth, t[depth + 1], depth === t.length - 1)).join("")}</div>`;
+    fileBrowserPanes(m`<div class="folder-columns" aria-label="폴더 깊이별 탐색">${t.map((path, depth) =>
+      browserColumn(path, depth, t[depth + 1], depth === t.length - 1)).join("")}</div>`);
 }
 function Ri(e) {
   const t = e.file.management === "off",
     s = `data-file="${M(e.file.id)}"`;
-  return `<details class="file-management-menu" data-disclosure="file-menu-${M(e.file.id)}"><summary id="file-management-trigger" aria-haspopup="menu" aria-expanded="false" aria-label="${a("파일 관리 메뉴")}" title="${a("파일 관리 메뉴")}">⋯</summary><div class="file-management-options" role="menu" aria-label="${a("파일 관리 메뉴")}">${t ? H("resume-management", a("다시 관리"), s + ' role="menuitem"') : H("ask-unmanage", a("관리 해제"), s + ' role="menuitem"')}${e.file.status === "forgotten" ? "" : H("ask-delete-records", a("관리 기록 삭제"), 'data-kind="file" role="menuitem"')}</div></details>`;
+  return `<details class="file-management-menu" data-disclosure="file-menu-${M(e.file.id)}"><summary id="file-management-trigger" aria-haspopup="menu" aria-expanded="false" aria-label="${a("파일 관리 메뉴")}" title="${a("파일 관리 메뉴")}">⋯</summary><div class="file-management-options" role="menu" aria-label="${a("파일 관리 메뉴")}">${H("open-folder", a("폴더 열기"), s + ' role="menuitem"' + (e.file.status === "forgotten" ? " disabled" : ""))}${H("file-info", a("보관 상태 설명"), 'role="menuitem"')}${H("clear-selection", a("선택 해제"), 'role="menuitem"')}${t ? H("resume-management", a("다시 관리"), s + ' role="menuitem"') : H("ask-unmanage", a("관리 해제"), s + ' role="menuitem"')}${e.file.status === "forgotten" ? "" : H("ask-delete-records", a("관리 기록 삭제"), 'data-kind="file" role="menuitem"')}</div></details>`;
 }
 function Li(e) {
   const t = ["deleted", "replaced"].includes(e.file.status),
@@ -10476,12 +10474,25 @@ function Li(e) {
 function Di(e, t) {
   return `<section class="record-delete"><div><h3>${a("관리 폴더 기록 삭제")}</h3><p>${a("실제 파일과 폴더는 그대로 두고, 앱의 관리 기록과 보관 버전을 삭제해요.")}</p></div>${H("ask-delete-records", a("관리 기록 삭제"), `id="root-delete-button" data-kind="${e}"`)}</section>`;
 }
-function Pi() {
+function fileSelectionBar() {
   const pending = activeFileRequest();
-  if (pending) return m`<section class="panel workspace-panel file-details minimal-detail" id="version-details" aria-label="파일 상세" aria-busy="true"><div class="minimal-detail-heading"><h2>${M(pending.name)}</h2>${H("close-detail", "×", a('aria-label="상세 닫기" title="상세 닫기"'))}</div><p class="subtle" role="status">${a("파일 상세를 불러오는 중")}</p></section>`;
-  const e = J,
-    t = e.versions[0],
-    s = Ct.managed.roots.find((i) => i.id === e.file.root),
+  const file = pending ? null : J?.file;
+  const name = pending?.name || (file ? it(file.path) : a("파일을 선택하세요"));
+  const latest = file && J.versions[0];
+  const version = latest ? "v" + latest.seq : file ? a(file.status === "forgotten" ? "기록 없음" : "보관 대기") : "";
+  const canOpen = file && !["deleted", "replaced", "forgotten"].includes(file.status);
+  return `<section class="file-selection-bar" aria-label="${a("파일 상세")}" aria-busy="${!!pending}">
+    <div class="file-selection-name" aria-live="polite">${oe("file")}<strong title="${M(file?.path || name)}">${M(name)}</strong><small>${version}</small></div>
+    <div class="file-selection-actions">
+      ${H("open-file", a("현재 파일 열기"), canOpen ? `data-file="${M(file.id)}"` : "disabled", true)}
+      ${H("file-history", oe("history") + a("버전 이력"), `id="file-history-trigger" aria-haspopup="dialog" ${file ? "" : "disabled"}`)}
+      ${file ? Ri(J) : `<button class="file-menu-placeholder" disabled aria-label="${a("파일 관리 메뉴")}">⋯</button>`}
+    </div>
+  </section>`;
+}
+function fileInfo(e) {
+  const t = e.versions[0];
+  const s = Ct.managed.roots.find((i) => i.id === e.file.root),
     n =
       e.file.status === "forgotten"
         ? "forgotten"
@@ -10495,9 +10506,12 @@ function Pi() {
                 : e.file.status === "stored" && t
                   ? "stored"
                   : "pending"
-              : "paused",
-    o = qs[n];
-  return m`<section class="panel workspace-panel file-details minimal-detail" id="version-details" aria-label="파일 상세"><div class="minimal-detail-heading"><h2 title="${M(it(e.file.path))}">${M(it(e.file.path))}</h2><button class="file-status-mark ${n}" data-action="ws-toggle-status" aria-label="${a("보관 상태 설명")}: ${a(o.label)}" title="${a("보관 상태 설명")}: ${a(o.description)}" aria-expanded="${Jt}" aria-controls="file-status-description">${Vs(n)}</button>${Ri(e)}${H("close-detail", "×", a('aria-label="상세 닫기" title="상세 닫기"'))}</div>${Jt ? `<div class="file-status-description" id="file-status-description"><strong>${a(o.label)}</strong><p>${a(o.description)}</p>${e.file.error ? `<p>${M(e.file.error)}</p>` : ""}${H("status-guide", a("표시 사용 안내"))}</div>` : ""}<p class="file-latest"><strong>${e.file.status === "forgotten" ? a("기록 삭제됨") : t ? "v" + t.seq : a("보관 대기")}</strong>${e.file.status === "forgotten" ? a("<span>저장된 버전이 없어요</span>") : t ? m`<span>최근 보관 ${hs(t.created)}</span>` : a("<span>첫 버전을 기다려요</span>")}</p><div class="file-detail-actions">${H("open-file", a("현재 파일 열기"), `data-file="${M(e.file.id)}" ${["deleted", "replaced", "forgotten"].includes(e.file.status) ? "disabled" : ""}`, !0)}${H("open-folder", a("폴더 열기"), `data-file="${M(e.file.id)}" ${e.file.status === "forgotten" ? "disabled" : ""}`)}</div>${Li(e)}<button class="history-disclosure" data-action="ws-toggle-history" aria-expanded="${dt}" aria-controls="file-version-history"><span>버전 이력 <small>${e.versions.length}</small></span><span aria-hidden="true">${dt ? "⌃" : "⌄"}</span></button>${dt ? m`<div id="file-version-history">${fi(e)}${e.versions.length ? e.versions.map((i) => m`<article class="managed-row"><div><strong>v${i.seq} · ${hs(i.created)}</strong></div>${H("restore", a("복원"), `data-version="${M(i.id)}"`)}</article>`).join("") : a("<p>아직 확정된 내용 버전이 없어요.</p>")}<details data-disclosure="events-${M(e.file.id)}"><summary>위치 변경·보관하지 못한 기간</summary>${e.events.map((i) => `<p>${Ga(i.created)} · ${M(i.kind)} · ${M(i.status)}<small>${M(i.old_path)} → ${M(i.path)}</small></p>`).join("")}${e.gaps.map((i) => `<p class="inline-warning">${Ga(i.start)} ~ ${i.end ? Ga(i.end) : a("현재")}: ${M(i.reason)}</p>`).join("")}</details></div>` : ""}</section>`;
+              : "paused";
+  const status = qs[n];
+  return m`<div class="workspace-panel file-info-content"><p>${M(e.file.path)}</p><strong>${a(status.label)}</strong><p>${a(status.description)}</p>${e.file.error ? `<p>${M(e.file.error)}</p>` : ""}${t ? m`<p>최근 보관 ${hs(t.created)}</p>` : ""}${Li(e)}${H("status-guide", a("표시 사용 안내"))}</div>`;
+}
+function fileVersionHistory(e) {
+  return m`<div id="file-version-history">${fi(e)}${e.versions.length ? e.versions.map((i) => m`<article class="managed-row"><div><strong>v${i.seq} · ${hs(i.created)}</strong></div>${H("restore", a("복원"), `data-version="${M(i.id)}"`)}</article>`).join("") : a("<p>아직 확정된 내용 버전이 없어요.</p>")}<details data-disclosure="events-${M(e.file.id)}"><summary>위치 변경·보관하지 못한 기간</summary>${e.events.map((i) => `<p>${Ga(i.created)} · ${M(i.kind)} · ${M(i.status)}<small>${M(i.old_path)} → ${M(i.path)}</small></p>`).join("")}${e.gaps.map((i) => `<p class="inline-warning">${Ga(i.start)} ~ ${i.end ? Ga(i.end) : a("현재")}: ${M(i.reason)}</p>`).join("")}</details></div>`;
 }
 function Bi(e) {
   return Pe
@@ -10505,26 +10519,31 @@ function Bi(e) {
         m`<section class="panel workspace-panel"><h2>적용 중인 규칙</h2>${Pe.rules.length ? Pe.rules.map((t) => m`<div class="managed-row"><div><strong>${M(t.template)}</strong><small>${M(t.scope)} · 기준 v${t.revision}</small></div>${H("disable-rule", a("사용 중지"), `data-rule="${M(t.id)}"`)}</div>`).join("") : a("<p>발견한 패턴을 승인하거나 내 규칙을 입력해 보세요.</p>")}<details data-disclosure="rule-editor"><summary>내 규칙 직접 만들기</summary><label for="ws-scope">적용할 하위 폴더 (전체 경로)</label><input id="ws-scope" value="${M(xa || e.path)}"><label for="ws-template">파일명 형식</label><input id="ws-template" value="${M(Pn)}"><p class="subtle">{텍스트} · {거래처} · {문서종류} · {날짜} · {번호} 사용 가능. 날짜는 YYYY-MM-DD 또는 YYYYMMDD예요.</p>${H("approve-custom", a("이 범위의 내 규칙으로 사용"), "", !0)}</details></section>${oi(Pe)}<section class="panel workspace-panel"><h2>학습한 정리 습관</h2><p>성공한 목적지 선택을 반영해요. 같은 내용의 반복 복사는 학습 근거를 늘리지 않아요.</p>${Pe.habits.map((t) => m`<p><code>${M(t.pattern)}</code><small>→ ${M(t.folder)} · 근거 가중치 ${t.count.toFixed(1)}</small></p>`).join("") || a("<p>아직 학습한 선택이 없어요.</p>")}${H("reset-learning", a("이 루트 추천 학습 초기화"))}<p class="subtle">파일·버전·직접 만든 이름 규칙은 유지돼요.</p></section>`
     : a("<p>이름을 분석하고 있어요.</p>");
 }
-function updateFileDetailPanel(fileId) {
-  const workbench = document.querySelector(".file-workbench");
+function updateFileSelection(fileId) {
+  const workbench = document.querySelector(".file-browser-panes");
   if (!workbench) return;
   gs = "";
   const selected = workbench.querySelector('[data-action="ws-timeline"][aria-pressed="true"]');
+  const row = fileId ? workbench.querySelector(`[data-action="ws-timeline"][data-file="${CSS.escape(fileId)}"]`) : null;
   if (selected?.dataset.file !== fileId) {
     selected?.setAttribute("aria-pressed", "false");
     selected?.classList.remove("selected");
-    const row = workbench.querySelector(`[data-action="ws-timeline"][data-file="${CSS.escape(fileId)}"]`);
     row?.setAttribute("aria-pressed", "true");
     row?.classList.add("selected");
   }
-  workbench.classList.add("has-detail");
-  workbench.classList.toggle("has-history", !!J && dt);
-  const panel = workbench.querySelector("#version-details");
-  if (panel) panel.outerHTML = Pi();
-  else workbench.insertAdjacentHTML("beforeend", Pi());
+  workbench.querySelector(".file-selection-bar").outerHTML = fileSelectionBar();
 }
-const browserActions = new Set(["ws-folder", "ws-page", "ws-timeline", "ws-toggle-history",
-  "ws-toggle-status", "ws-close-detail", "ws-root-settings", "ws-root-select", "ws-file-view"]);
+function revealFileColumn(row) {
+  const column = row?.closest(".folder-column");
+  if (!column || !column.getClientRects().length) return;
+  const list = column.parentElement;
+  const bounds = column.getBoundingClientRect();
+  const left = list.getBoundingClientRect().left + list.clientLeft;
+  if (bounds.left < left) list.scrollLeft += bounds.left - left;
+  else if (bounds.right > left + list.clientWidth) list.scrollLeft += bounds.right - left - list.clientWidth;
+}
+const browserActions = new Set(["ws-folder", "ws-page", "ws-timeline", "ws-file-history",
+  "ws-file-info", "ws-clear-selection", "ws-ask-unmanage", "ws-root-settings", "ws-root-select", "ws-file-view"]);
 async function Hi(e, t) {
   var n, o, i, c, u, d;
   if (
@@ -10605,12 +10624,26 @@ async function Hi(e, t) {
   }
   else if (s === "file-view")
     (++detailRequest, (Se = t.dataset.view), (pe = 1), (J = null), (De = !1));
-  else if (s === "ask-unmanage") De = !0;
-  else if (s === "cancel-unmanage") De = !1;
-  else if (s === "close-detail") (++detailRequest, (De = !1), (J = null), ba());
-  else if (s === "toggle-history") dt = !dt;
-  else if (s === "toggle-status") Jt = !Jt;
-  else if (s === "status-guide") ((Ke = 2), Xe("help"));
+  else if (s === "clear-selection") {
+    const row = document.querySelector('.file-browser-panes [data-action="ws-timeline"][aria-pressed="true"]');
+    ++detailRequest;
+    J = null;
+    De = false;
+    ba();
+    updateFileSelection(null);
+    row?.focus({ preventScroll: true });
+    return true;
+  }
+  else if (s === "file-history" || s === "file-info" || s === "ask-unmanage") {
+    if (!J) return true;
+    De = s === "ask-unmanage";
+    p = { type: s === "file-history" ? s : "file-info", timeline: J };
+    K();
+    document.querySelector('.modal [data-action="close"]')?.focus({ preventScroll: true });
+    return true;
+  }
+  else if (s === "cancel-unmanage") De = false;
+  else if (s === "status-guide") { p = null; Ke = 2; Xe("help"); }
   else if (s === "root-select") za(t.dataset.root);
   else if (s === "root-settings") wa = !wa;
   else if (s === "ask-delete-records" && W.manage) {
@@ -10674,6 +10707,7 @@ async function Hi(e, t) {
             : "resume",
       ),
         (De = !1),
+        (p = null),
         s !== "keep-management" && (J = null),
         _e(
           a(
@@ -10709,13 +10743,13 @@ async function Hi(e, t) {
       await W.manage("active", r, f);
     } else if (s === "timeline") {
       const request = ++detailRequest;
-      if (J?.file.id !== t.dataset.file) ((De = !1), ba(), (dt = !1), (Jt = !1));
+      if (J?.file.id !== t.dataset.file) ((De = !1), ba());
       const file = t.dataset.file;
       const prepared = preparedTimeline?.root === le && preparedTimeline.id === file ? preparedTimeline : null;
       preparedTimeline = null;
       J = null;
       openingFile = { request, root: le, id: file, name: t.querySelector("strong")?.textContent || "" };
-      if (!prepared?.value) updateFileDetailPanel(file);
+      if (!prepared?.value) updateFileSelection(file);
       try {
         const timeline = prepared?.value || await (prepared?.read || W.manage("timeline", file));
         if (detailRequest !== request || ie !== "files" || openingFile?.root !== le) return true;
@@ -10724,7 +10758,7 @@ async function Hi(e, t) {
         if (openingFile?.request === request) openingFile = null;
         if (!J && request === detailRequest && ie === "files") K();
       }
-      updateFileDetailPanel(file);
+      updateFileSelection(file);
     }
     else if (s === "open-file") await W.manage("openFile", t.dataset.file);
     else if (s === "open-folder")
@@ -10764,11 +10798,6 @@ async function Hi(e, t) {
       ((r.tabIndex = -1),
       r.focus({ preventScroll: !0 }),
       r.scrollIntoView({ block: "nearest", behavior: "instant" }));
-  }
-  if (s === "timeline") {
-    const detail = document.getElementById("version-details");
-    if (detail && detail.getBoundingClientRect().top > detail.previousElementSibling.getBoundingClientRect().top)
-      detail.scrollIntoView({ block: "start", behavior: "instant" });
   }
   return !0;
 }
@@ -11106,7 +11135,12 @@ function ms() {
     t = "",
     s = "";
   const n = N.plants[p.id ?? Ft];
-  if (p.type === "dash-plants")
+  if (p.type === "file-history" || p.type === "file-info") {
+    const timeline = J?.file.id === p.timeline.file.id ? J : p.timeline;
+    const history = p.type === "file-history";
+    t = M(it(timeline.file.path)) + " · " + a(history ? "버전 이력" : "파일 상세");
+    e = history ? fileVersionHistory(timeline) : fileInfo(timeline);
+  } else if (p.type === "dash-plants")
     ((t = a("화분 설정")),
       (e = '<div class="plant-grid">' + qi() + "</div>"),
       (s = P("close", a("닫기"), "outline")));
@@ -11328,7 +11362,10 @@ function Ks() {
   else if (selected.offsetLeft + selected.offsetWidth > list.scrollLeft + list.clientWidth)
     list.scrollLeft = selected.offsetLeft + selected.offsetWidth - list.clientWidth;
 }
-window.addEventListener("resize", () => requestAnimationFrame(Ks));
+window.addEventListener("resize", () => requestAnimationFrame(() => {
+  Ks();
+  revealFileColumn(document.querySelector(".folder-columns .browser-file.selected"));
+}));
 let gs = "",
   vs = "",
   bs;
@@ -11357,6 +11394,8 @@ function Ns(e) {
 function K() {
   var b, j, v, T, I;
   if (!N) return;
+  const returnToFileAction = !p && (bn?.type === "file-history" || bn?.type === "file-info")
+    ? (bn.type === "file-history" ? "file-history-trigger" : "file-management-trigger") : null;
   if (Ui()) {
     jt = !0;
     return;
@@ -11404,20 +11443,13 @@ function K() {
         : j.dataset.root,
     c = Array.from(
       document.querySelectorAll(
-        ".folder-columns,.folder-entries,.root-pot-list,.dash-file-list,.dash-usage-list",
+        ".folder-columns,.folder-entries,.managed-list[data-scroll-key],.root-pot-list,.dash-file-list,.dash-usage-list",
       ),
-    ).map((h) => {
-      var l;
-      return {
-        key:
-          h.className +
-          ((l = h.parentElement) == null
-            ? void 0
-            : l.getAttribute("aria-label")),
-        x: h.scrollLeft,
-        y: h.scrollTop,
-      };
-    }),
+    ).map(h => ({
+      key: h.dataset.scrollKey || h.className + h.parentElement?.getAttribute("aria-label"),
+      x: h.scrollLeft,
+      y: h.scrollTop,
+    })),
     u = (v = document.activeElement) == null ? void 0 : v.id,
     d =
       document.activeElement instanceof HTMLInputElement
@@ -11507,20 +11539,17 @@ function K() {
       T.focus({ preventScroll: !0 })),
     document
       .querySelectorAll(
-        ".folder-columns,.folder-entries,.root-pot-list,.dash-file-list,.dash-usage-list",
+        ".folder-columns,.folder-entries,.managed-list[data-scroll-key],.root-pot-list,.dash-file-list,.dash-usage-list",
       )
       .forEach((h) => {
-        const l = c.find((g) => {
-          var z;
-          return (
-            g.key ===
-            h.className +
-              ((z = h.parentElement) == null
-                ? void 0
-                : z.getAttribute("aria-label"))
-          );
-        });
-        l && ((h.scrollLeft = l.x), (h.scrollTop = l.y));
+        const key = h.dataset.scrollKey || h.className + h.parentElement?.getAttribute("aria-label");
+        const l = c.find(g => g.key === key);
+        if (l) {
+          h.scrollLeft = l.x;
+          h.scrollTop = l.y;
+        } else if (h.matches(".folder-columns")) {
+          revealFileColumn(h.querySelector(".browser-file.selected"));
+        }
       }),
     i !==
       ((I = document.querySelector(".root-pot-card.selected")) == null
@@ -11531,6 +11560,7 @@ function K() {
       e.has(h.dataset.disclosure) && (h.open = e.get(h.dataset.disclosure));
     }),
     ws());
+  if (returnToFileAction) document.getElementById(returnToFileAction)?.focus({ preventScroll: true });
   const f = te.querySelector(".modal-content");
   f && s !== void 0 && (f.scrollTop = s);
 }
@@ -12066,6 +12096,11 @@ document.addEventListener("keydown", (e) => {
         ((s.open = !1), (t = s.querySelector("summary")) == null || t.focus());
         return;
       }
+    }
+    if (e.key === "Escape" && !p && !Oe && e.target.closest?.(".file-browser-panes") && (J || activeFileRequest())) {
+      e.preventDefault();
+      Hi("ws-clear-selection", e.target);
+      return;
     }
     if (e.key === "Escape" && Oe) {
       Hn();
