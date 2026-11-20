@@ -165,6 +165,7 @@ impl Store {
           CREATE TABLE IF NOT EXISTS organize_policies(root TEXT NOT NULL REFERENCES roots(id),scope TEXT NOT NULL,policy TEXT NOT NULL,PRIMARY KEY(root,scope));
           CREATE TABLE IF NOT EXISTS ops(id TEXT PRIMARY KEY,batch TEXT,plant INTEGER,source TEXT,destination TEXT,hash TEXT,mode TEXT,status TEXT,reward INTEGER DEFAULT 1,created INTEGER);
           CREATE TABLE IF NOT EXISTS op_journal(id TEXT PRIMARY KEY REFERENCES ops(id),from_path TEXT NOT NULL,to_path TEXT NOT NULL,file_key TEXT NOT NULL,undo INTEGER NOT NULL);
+          CREATE TABLE IF NOT EXISTS managed_moves(operation TEXT PRIMARY KEY REFERENCES ops(id) ON DELETE CASCADE,file TEXT NOT NULL REFERENCES files(id) ON DELETE CASCADE);
           CREATE TABLE IF NOT EXISTS task_items(id TEXT PRIMARY KEY,batch TEXT NOT NULL,payload TEXT NOT NULL,status TEXT NOT NULL,reason TEXT NOT NULL DEFAULT '',operation TEXT REFERENCES ops(id),created INTEGER NOT NULL,updated INTEGER NOT NULL);
           CREATE TABLE IF NOT EXISTS aftercare(id TEXT PRIMARY KEY,operation TEXT NOT NULL REFERENCES ops(id),root TEXT NOT NULL REFERENCES roots(id),kind TEXT NOT NULL,status TEXT NOT NULL,reason TEXT NOT NULL DEFAULT '',updated INTEGER NOT NULL);"))?;
         create_file_index(&mut db)?;

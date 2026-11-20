@@ -164,6 +164,19 @@ pub struct ObservedFile {
 }
 
 impl ObservedFile {
+    pub fn move_key(&self) -> io::Result<String> {
+        // A FAT directory entry number can change on rename. The volume and birth
+        // time survive it. The transfer journal also verifies the full content hash.
+        if let Some(index) = self.key.strip_prefix("file-index:") {
+            let volume = index.split(':').next().unwrap_or_default();
+            return Ok(format!(
+                "fat-created:{volume}:{:?}",
+                self.file.metadata()?.created()?
+            ));
+        }
+        Ok(self.key.clone())
+    }
+
     pub fn open(path: &Path) -> io::Result<Self> {
         let file = File::open(local(path)?)?;
         let key = observation_identity(&file)?;

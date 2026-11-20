@@ -29,6 +29,10 @@
   }
 })();
 const Vn = {
+  "폴더로 이동": { en: "Move to folder", ja: "フォルダーに移動", "zh-CN": "移至文件夹" },
+  "이동할 폴더": { en: "Destination folder", ja: "移動先のフォルダー", "zh-CN": "目标文件夹" },
+  "폴더를 선택하세요": { en: "Choose a folder", ja: "フォルダーを選択", "zh-CN": "选择文件夹" },
+  "폴더 위에 놓으세요": { en: "Drop on a folder", ja: "フォルダーにドロップ", "zh-CN": "拖放到文件夹" },
   "다시 시도해 주세요.": {
     en: "Please try again.",
     ja: "もう一度お試しください。",
@@ -10333,7 +10337,7 @@ function us(e) {
     s = (activeFileRequest()?.id || J?.file.id) === e.id;
   return Se === "attention"
     ? `<${e.id ? 'button type="button"' : "div"} class="managed-row attention-row" ${e.id ? `data-action="ws-timeline" data-file="${M(e.id)}" aria-pressed="${s}"` : ""}><span class="file-summary"><strong>${M(t)}</strong><small>${M(e.path)}</small><span class="attention-reason">${M(a(e.reason))}</span></span><span class="file-state">${a(e.kind === "directory" ? "폴더 범위" : e.management === "off" ? "관리 해제" : e.reason === "자동 보관 제외 규칙에 해당해요." ? "규칙 제외" : "미보관")}</span></${e.id ? "button" : "div"}>`
-    : m`<button type="button" class="managed-row browser-file ${s ? "selected" : ""}" data-action="ws-timeline" data-file="${M(e.id)}" aria-pressed="${s}" aria-label="${M(t)} · ${e.version_count}개 버전 · ${M(a(e.management === "off" ? "관리 해제" : nn[e.status] || e.status))}" title="${M(e.path)}${e.error ? " — " + M(e.error) : ""}"><svg class="file-glyph" viewBox="0 0 20 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M3 2h9l5 5v15H3zM12 2v6h5M6 12h8M6 16h8"/></svg><span class="file-summary"><strong>${M(t)}</strong>${Ve || Se !== "managed" ? `<small>${M(e.path)}</small>` : ""}</span>${e.status !== "stored" || e.management === "off" ? `<span class="file-state">${M(a(e.management === "off" ? "관리 해제" : nn[e.status] || e.status))}</span>` : ""}<span class="file-version">${e.status === "forgotten" ? a("기록 없음") : e.version_count ? "v" + e.version_count : a("대기")}</span></button>`;
+    : m`<button type="button" ${e.status === "stored" ? `data-open-current ${Se === "managed" && Ct.managed.fileMove && Ct.managed.roots.some(root => root.id === le && root.active) ? `data-move-path="${M(e.path)}"` : ""}` : ""} class="managed-row browser-file ${s ? "selected" : ""}" data-action="ws-timeline" data-file="${M(e.id)}" aria-pressed="${s}" aria-label="${M(t)} · ${e.version_count}개 버전 · ${M(a(e.management === "off" ? "관리 해제" : nn[e.status] || e.status))}" title="${M(e.path)}${e.error ? " — " + M(e.error) : ""}"><svg class="file-glyph" viewBox="0 0 20 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M3 2h9l5 5v15H3zM12 2v6h5M6 12h8M6 16h8"/></svg><span class="file-summary"><strong>${M(t)}</strong>${Ve || Se !== "managed" ? `<small>${M(e.path)}</small>` : ""}</span>${e.status !== "stored" || e.management === "off" ? `<span class="file-state">${M(a(e.management === "off" ? "관리 해제" : nn[e.status] || e.status))}</span>` : ""}<span class="file-version">${e.status === "forgotten" ? a("기록 없음") : e.version_count ? "v" + e.version_count : a("대기")}</span></button>`;
 }
 function browserPath(base, folder) {
   const path = [];
@@ -10485,6 +10489,7 @@ function fileSelectionBar() {
     <div class="file-selection-name" aria-live="polite">${oe("file")}<strong title="${M(file?.path || name)}">${M(name)}</strong><small>${version}</small></div>
     <div class="file-selection-actions">
       ${H("open-file", a("현재 파일 열기"), canOpen ? `data-file="${M(file.id)}"` : "disabled", true)}
+      ${Se === "managed" && Ct.managed.fileMove ? H("move-picker", a("폴더로 이동"), `aria-haspopup="dialog" ${file?.status === "stored" && Ct.managed.roots.some(root => root.id === le && root.active) ? "" : "disabled"}`) : ""}
       ${H("file-history", oe("history") + a("버전 이력"), `id="file-history-trigger" aria-haspopup="dialog" ${file ? "" : "disabled"}`)}
       ${file ? Ri(J) : `<button class="file-menu-placeholder" disabled aria-label="${a("파일 관리 메뉴")}">⋯</button>`}
     </div>
@@ -11396,7 +11401,7 @@ function K() {
   if (!N) return;
   const returnToFileAction = !p && (bn?.type === "file-history" || bn?.type === "file-info")
     ? (bn.type === "file-history" ? "file-history-trigger" : "file-management-trigger") : null;
-  if (Ui()) {
+  if (Ui() || fileDrag) {
     jt = !0;
     return;
   }
@@ -11724,6 +11729,174 @@ te.addEventListener("change", (e) => {
       }
     }));
 });
+// Internal pointer gestures coexist with the native drop target for files from Explorer.
+let fileDrag = null;
+let suppressFileClick = false;
+let movingFile = false;
+function fileDropTarget(event, drag) {
+  if (ie !== "files" || le !== drag.root || p || Ws()) return null;
+  const hit = document.elementFromPoint(event.clientX, event.clientY);
+  if (!hit || hit.closest("dialog")) return null;
+  const target = hit.closest('[data-action="ws-folder"],.folder-column');
+  return target && te.contains(target) && target.dataset.path !== vn(drag.path) ? target : null;
+}
+function endFileDrag() {
+  const drag = fileDrag;
+  if (!drag) return;
+  fileDrag = null;
+  clearTimeout(drag.hover);
+  drag.target?.classList.remove("file-drop-target");
+  drag.preview?.remove();
+  drag.source.classList.remove("file-moving");
+  if (drag.active) {
+    document.body.classList.remove("moving-managed-file");
+    if (te.hasPointerCapture(drag.pointer)) te.releasePointerCapture(drag.pointer);
+    suppressFileClick = true;
+    setTimeout(() => { suppressFileClick = false; }, 0);
+  }
+  if (jt) setTimeout(K, 0);
+}
+te.addEventListener("pointerdown", event => {
+  const source = event.target.closest(".browser-file[data-move-path]");
+  if (!source || event.button !== 0 || !event.isPrimary || event.pointerType === "touch" || movingFile || p || N.busy) return;
+  fileDrag = { pointer: event.pointerId, x: event.clientX, y: event.clientY, root: le,
+    file: source.dataset.file, path: source.dataset.movePath, source };
+});
+window.addEventListener("pointermove", event => {
+  const drag = fileDrag;
+  if (!drag || event.pointerId !== drag.pointer) return;
+  if (!(event.buttons & 1)) { endFileDrag(); return; }
+  if (!drag.active) {
+    if (Math.hypot(event.clientX - drag.x, event.clientY - drag.y) < 6) return;
+    clearFileClick();
+    drag.active = true;
+    drag.preview = document.createElement("div");
+    drag.preview.className = "file-drag-preview";
+    drag.preview.setAttribute("aria-hidden", "true");
+    drag.preview.append(document.createElement("strong"), document.createElement("small"));
+    drag.preview.firstChild.textContent = it(drag.path);
+    document.body.append(drag.preview);
+    te.setPointerCapture(drag.pointer);
+    drag.source.classList.add("file-moving");
+    document.body.classList.add("moving-managed-file");
+  }
+  event.preventDefault();
+  const target = fileDropTarget(event, drag);
+  const destination = target?.dataset.path;
+  drag.preview.lastChild.textContent = destination
+    ? "→ " + (it(destination) || destination) : a("폴더 위에 놓으세요");
+  drag.preview.style.left = Math.max(0, Math.min(event.clientX + 14, innerWidth - drag.preview.offsetWidth - 6)) + "px";
+  drag.preview.style.top = Math.max(0, Math.min(event.clientY + 18, innerHeight - drag.preview.offsetHeight - 6)) + "px";
+  if (target !== drag.target) {
+    clearTimeout(drag.hover);
+    drag.target?.classList.remove("file-drop-target");
+    drag.target = target;
+    target?.classList.add("file-drop-target");
+    if (target?.matches(".folder-entry") && qe !== target.dataset.path) {
+      drag.hover = setTimeout(() => {
+        if (fileDrag === drag && target.isConnected)
+          selectBrowserFolder(target.dataset.path).catch(error => ce(String(error)));
+      }, 650);
+    }
+  }
+});
+window.addEventListener("pointerup", async event => {
+  const drag = fileDrag;
+  if (!drag || event.pointerId !== drag.pointer) return;
+  const folder = drag.active && fileDropTarget(event, drag)?.dataset.path;
+  const highlighted = drag.target?.dataset.path;
+  endFileDrag();
+  if (folder && folder === highlighted) await moveBrowserFile(drag, folder);
+}, true);
+async function moveBrowserFile(drag, folder) {
+  if (movingFile || le !== drag.root || ie !== "files") return;
+  movingFile = true;
+  try {
+    await W.manage("move-file", drag.file, drag.path, folder);
+    await ye();
+    ce(m`${it(drag.path)} → ${it(folder) || folder}`);
+  } catch (error) {
+    ce(String(error));
+  } finally {
+    movingFile = false;
+  }
+}
+// Capture the source before showing the dialog. A watcher refresh can change selection.
+function showFileMovePicker() {
+  const file = J?.file;
+  const root = Ct.managed.roots.find(item => item.id === le && item.active);
+  if (!file || !root || file.root !== root.id || movingFile || document.querySelector("dialog[open]")) return;
+  const source = { file: file.id, path: file.path, root: root.id };
+  const dialog = document.createElement("dialog");
+  dialog.className = "management-dialog file-move-picker";
+  dialog.setAttribute("aria-labelledby", "file-move-title");
+  dialog.innerHTML = `<h2 id="file-move-title">${a("폴더로 이동")}</h2><p class="management-target">${M(it(file.path))}</p>
+    <label for="file-move-destination">${a("이동할 폴더")}</label><select id="file-move-destination"><option value="">${a("폴더를 선택하세요")}</option></select>
+    <footer><button class="button outline" type="button">${a("취소")}</button><button type="button" class="button primary" disabled>${a("폴더로 이동")}</button></footer>`;
+  const select = dialog.querySelector("select");
+  const [cancel, confirm] = dialog.querySelectorAll("button");
+  const parent = vn(file.path);
+  for (const path of Sn) {
+    const relative = path.slice(root.path.length).replace(/^[\\/]+/, "");
+    const option = new Option((it(root.path) || root.path) + (relative ? " / " + relative : ""), path);
+    option.disabled = path === parent;
+    select.append(option);
+  }
+  select.onchange = () => { confirm.disabled = !select.value || select.value === parent; };
+  cancel.onclick = () => dialog.close();
+  confirm.onclick = () => dialog.close("move");
+  dialog.addEventListener("close", () => {
+    const folder = select.value;
+    dialog.remove();
+    te.querySelector('[data-action="ws-move-picker"]')?.focus({ preventScroll: true });
+    if (dialog.returnValue === "move" && folder) void moveBrowserFile(source, folder);
+  }, { once: true });
+  document.body.append(dialog);
+  dialog.showModal();
+  select.focus();
+}
+window.addEventListener("pointercancel", endFileDrag);
+window.addEventListener("blur", endFileDrag);
+te.addEventListener("lostpointercapture", endFileDrag);
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape" && fileDrag) endFileDrag();
+});
+let previousFileClick;
+function clearFileClick() {
+  clearTimeout(previousFileClick?.timer);
+  previousFileClick = null;
+}
+window.addEventListener("blur", clearFileClick);
+// WebView2 can reset click counts when a watcher replaces a row between clicks.
+function handleFileActivation(event, row) {
+  const previous = previousFileClick;
+  clearFileClick();
+  const dashboard = row?.dataset.action === "dash-file";
+  if (!row || (!dashboard && !row.matches(".browser-file[data-open-current]")) ||
+      event.detail === 0 || event.button !== 0 || movingFile || suppressFileClick || p) return false;
+  const root = dashboard ? row.dataset.root : le;
+  const file = row.dataset.file;
+  const interval = N.doubleClickMs || 500;
+  const replaced = previous && !previous.row.isConnected && event.timeStamp - previous.time <= interval &&
+    Math.hypot(event.clientX - previous.x, event.clientY - previous.y) <= 6;
+  if (previous && previous.file === file && previous.root === root && previous.page === ie &&
+      (event.detail === 2 || replaced)) {
+    W.manage("openFile", file).catch(error => ce(String(error)));
+    return true;
+  }
+  const click = { root, file, page: ie, row, time: event.timeStamp, x: event.clientX, y: event.clientY };
+  previousFileClick = click;
+  click.timer = setTimeout(() => {
+    if (previousFileClick !== click) return;
+    clearFileClick();
+    if (dashboard && ie === click.page && !p) {
+      $i(root, file);
+      ie = "files";
+      ye();
+    }
+  }, interval + 25);
+  return dashboard;
+}
 function prepareFolderColumn(button) {
   if (ie === "files" && button?.isConnected && browserListing?.scoped && browserListing.root === le)
     readFolderColumn(button.dataset.path).catch(() => {});
@@ -11752,10 +11925,13 @@ te.addEventListener("pointerdown", event => {
 te.addEventListener("focusin", event => prepareFolderColumn(event.target.closest(".folder-entry")));
 te.addEventListener("click", (e) => {
   var i, c, u, d;
+  if (suppressFileClick) { e.preventDefault(); return; }
   const t = te.querySelector(".file-management-menu[open]");
   t && !e.target.closest(".file-management-menu") && (t.open = !1);
   const s = e.target.closest("[data-action]");
+  if (handleFileActivation(e, s)) { e.preventDefault(); return; }
   if (!s || (e.preventDefault(), s.disabled)) return;
+  if (s.dataset.action === "ws-move-picker") { showFileMovePicker(); return; }
   const n = s.dataset.action,
     o = Number(s.dataset.id ?? Ft);
   if (n === "dash-root" || n === "dash-file") {

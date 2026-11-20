@@ -122,6 +122,8 @@ fn uses_archive(method: &str, command: Option<&str>) -> bool {
                     | "storage-pick-directory"
                     | "files"
                     | "folder-column-files"
+                    | "openFile"
+                    | "openFileFolder"
                     | "browseFolders"
                     | "attention-files"
                     | "timeline"
@@ -999,6 +1001,17 @@ impl Backend {
                 Ok(json!(true))
             }
             "files" => Ok(json!(core.store.list(text(a)?, b == "unmanaged")?)),
+            "move-file" if sender == "manager" => {
+                if self.deleting.load(Ordering::SeqCst)
+                    || self.transferring.load(Ordering::SeqCst)
+                    || core.blocked()?
+                {
+                    return Err("진행 중인 파일 작업을 먼저 마쳐 주세요.".into());
+                }
+                core.move_managed_file(text(a)?, Path::new(text(b)?), Path::new(text(c)?))?;
+                self.changed();
+                Ok(json!(true))
+            }
             "folder-column-files" => Ok(json!(core.store.folder_column_files(
                 text(a)?,
                 Path::new(text(b)?),
@@ -1474,6 +1487,11 @@ fn validate_labels(value: &Value) -> Result<Value> {
 
 impl Core {
     fn state(&self, version: &str) -> Result<Value> {
+        #[cfg(windows)]
+        let double_click_ms =
+            unsafe { windows_sys::Win32::UI::Input::KeyboardAndMouse::GetDoubleClickTime() };
+        #[cfg(not(windows))]
+        let double_click_ms = 500;
         let days: i64 = self
             .store
             .db
@@ -1510,8 +1528,8 @@ impl Core {
         )?.pop().unwrap_or_else(|| json!({}));
         Ok(
             json!({"plants":plants,"days":days,"ops":ops,"tasks":{"counts":task_counts,"items":tasks,"limit":100},"total":total,"today":total,"blocked":self.blocked()?,"busy":false,"progress":null,"settings":settings,
-            "tutorial":self.store.get("tutorial",Value::Null)?,"organize":organizer::jobs(&self.store,None)?,"aftercare":{"counts":archive_counts,"items":archive},"themes":themes::summary(&self.store)?,"managed":{"folderColumns":true,"ready":true,"roots":roots,"storage":storage,"budget":storage["budget"],"error":"","deleting":false,"recordJob":self.store.get("recordJob",Value::Null)?},
-            "guide":self.store.get("guide",json!({"step":0,"status":"not_started","version":1}))?,"native":true,"platform":if cfg!(windows) {"win32"} else {"darwin"},"canClickThrough":self.tray_ready,"version":version}),
+            "tutorial":self.store.get("tutorial",Value::Null)?,"organize":organizer::jobs(&self.store,None)?,"aftercare":{"counts":archive_counts,"items":archive},"themes":themes::summary(&self.store)?,"managed":{"fileMove":true,"folderColumns":true,"ready":true,"roots":roots,"storage":storage,"budget":storage["budget"],"error":"","deleting":false,"recordJob":self.store.get("recordJob",Value::Null)?},
+            "guide":self.store.get("guide",json!({"step":0,"status":"not_started","version":1}))?,"native":true,"platform":if cfg!(windows) {"win32"} else {"darwin"},"doubleClickMs":double_click_ms,"canClickThrough":self.tray_ready,"version":version}),
         )
     }
 

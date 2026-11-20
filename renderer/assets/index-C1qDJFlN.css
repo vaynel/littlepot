@@ -6760,3 +6760,33 @@ html .managed-folder-row.root-order-ghost {
     flex-wrap: wrap;
   }
 }
+
+.browser-file[data-move-path] { user-select: none; cursor: grab; }
+.moving-managed-file .browser-file[data-move-path] { cursor: grabbing; }
+.file-drag-preview {
+  position: fixed;
+  z-index: 10000;
+  pointer-events: none;
+  display: grid;
+  gap: 2px;
+  max-width: min(280px, 80vw);
+  padding: 7px 12px;
+  border: 1px solid var(--green);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 3px 9px rgb(0 0 0 / 16%);
+}
+.file-drag-preview > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-drag-preview strong { font-size: 13px; }
+.file-drag-preview small { font-size: 12px; }
+.file-move-picker select { width: 100%; min-width: 0; margin-top: 6px; }
+.file-move-picker label { display: block; }
+.file-move-picker .management-target { overflow-wrap: anywhere; }
+.moving-managed-file, .moving-managed-file .folder-entry { cursor: grabbing; }
+.browser-file.file-moving { opacity: .6; }
+.folder-panel .file-drop-target {
+  outline: 2px solid var(--green);
+  outline-offset: -2px;
+  background: var(--theme-sidebar, #e8f0e6);
+}

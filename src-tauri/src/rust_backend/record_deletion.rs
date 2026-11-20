@@ -150,12 +150,16 @@ impl Store {
             [],
         )?;
         let ops = self.rows(
-            "SELECT json_object('id',id,'source',source,'destination',destination) FROM ops",
+            "SELECT json_object('id',o.id,'source',o.source,'destination',o.destination,'file',m.file)
+             FROM ops o LEFT JOIN managed_moves m ON m.operation=o.id",
             [],
         )?;
         let operations: Vec<&str> = ops
             .iter()
             .filter_map(|op| {
+                if let Some(file) = op["file"].as_str() {
+                    return op["id"].as_str().filter(|_| ids.contains(file));
+                }
                 if !["source", "destination"]
                     .iter()
                     .any(|key| op[key].as_str().is_some_and(affected))

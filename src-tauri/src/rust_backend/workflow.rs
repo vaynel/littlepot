@@ -543,6 +543,83 @@ impl Core {
         Ok(())
     }
 
+    pub(super) fn move_managed_file(
+        &mut self,
+        file: &str,
+        displayed: &Path,
+        folder: &Path,
+    ) -> Result<()> {
+        let (root, path, hash, plant): (String, String, String, Option<i64>) = self
+            .store
+            .db
+            .query_row(
+                "SELECT r.id,f.path,f.hash,r.plant FROM files f JOIN roots r ON r.id=f.root
+             LEFT JOIN file_controls c ON c.file=f.id
+             WHERE f.id=? AND f.status='stored' AND r.active=1 AND COALESCE(c.state,'')!='off'",
+                [file],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+            )
+            .optional()?
+            .ok_or("현재 관리 중인 파일을 선택해 주세요.")?;
+        if Path::new(&path) != displayed {
+            return Err("파일 위치가 바뀌었어요. 목록에서 다시 선택해 주세요.".into());
+        }
+        let base = files::local(&self.store.root_path(&root)?)?;
+        let source = files::local(displayed)?;
+        let folder = files::local(folder)?;
+        if !source.starts_with(&base)
+            || !folder.starts_with(&base)
+            || !folder.is_dir()
+            || folder.starts_with(self.store.archive_directory())
+            || folder.starts_with(&self.store.data)
+        {
+            return Err("같은 관리 폴더 안의 폴더를 선택해 주세요.".into());
+        }
+        if folder != base
+            && !self.store.db.query_row(
+                "SELECT EXISTS(SELECT 1 FROM scan_folders WHERE root=? AND path=?
+             UNION ALL SELECT 1 FROM files WHERE root=?1 AND substr(path,1,length(?3))=?3 LIMIT 1)",
+                params![
+                    root,
+                    folder.to_string_lossy(),
+                    format!("{}{}", folder.display(), std::path::MAIN_SEPARATOR)
+                ],
+                |row| row.get::<_, bool>(0),
+            )?
+        {
+            return Err("목록에 있는 관리 폴더를 선택해 주세요.".into());
+        }
+        let target = folder.join(source.file_name().ok_or("파일 이름을 확인해 주세요.")?);
+        if target == source {
+            return Ok(());
+        }
+        if target.try_exists()? || self.store.db.query_row(
+            "SELECT EXISTS(SELECT 1 FROM files WHERE root=? AND path=? AND status NOT IN ('deleted','replaced'))",
+            params![root,target.to_string_lossy()], |row| row.get::<_,bool>(0))? {
+            return Err("대상 폴더에 같은 이름의 파일이 있어 이동하지 않았어요.".into());
+        }
+        let observed = files::ObservedFile::open(&source)?;
+        if files::digest(&observed.bytes()?) != hash {
+            return Err("파일이 바뀌었어요. 새 버전이 보관된 뒤 다시 이동해 주세요.".into());
+        }
+        let key = observed.move_key()?;
+        let id = Uuid::new_v4().to_string();
+        let target_text = target.to_string_lossy();
+        let tx = self.store.db.transaction()?;
+        tx.execute(
+            "INSERT INTO ops(id,batch,plant,source,destination,hash,mode,status,reward,created)
+                    VALUES (?1,?1,?2,?3,?4,?5,'move','planned',0,?6)",
+            params![id, plant, path, target_text, hash, now()],
+        )?;
+        tx.execute(
+            "INSERT INTO op_journal VALUES (?,?,?,?,0)",
+            params![id, path, target_text, key],
+        )?;
+        tx.execute("INSERT INTO managed_moves VALUES (?,?)", params![id, file])?;
+        tx.commit()?;
+        self.transfer(&id, &source, &target, &key, &hash, false, false)
+    }
+
     pub(super) fn undo(&mut self, id: &str) -> Result<()> {
         if self.blocked()? {
             return Err("이전 파일 정리 결과를 먼저 확인해 주세요.".into());
@@ -608,9 +685,36 @@ impl Core {
     }
 
     fn set_op_status(&self, id: &str, status: &str) -> Result<()> {
-        self.store
-            .db
-            .execute("UPDATE ops SET status=? WHERE id=?", params![status, id])?;
+        let tx = self.store.db.unchecked_transaction()?;
+        tx.execute("UPDATE ops SET status=? WHERE id=?", params![status, id])?;
+        if matches!(status, "completed" | "undone") {
+            let moved: Option<(String,String,String)> = tx.query_row(
+                "SELECT m.file,o.source,o.destination FROM managed_moves m JOIN ops o ON o.id=m.operation WHERE m.operation=?",
+                [id], |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?))).optional()?;
+            if let Some((file, source, target)) = moved {
+                let (from, to) = if status == "undone" {
+                    (target, source)
+                } else {
+                    (source, target)
+                };
+                if tx.execute(
+                    "UPDATE files SET path=?,observed=?,status='stored' WHERE id=? AND path=?",
+                    params![to, now(), file, from],
+                )? == 1
+                {
+                    tx.execute(
+                        "INSERT INTO events(id,file,kind,path,old_path,status,created,metadata)
+                        VALUES (?,?,'renamed',?,?,'committed',?,'{}')",
+                        params![Uuid::new_v4().to_string(), file, to, from, now()],
+                    )?;
+                    tx.execute(
+                        "UPDATE file_identities SET signature='' WHERE file=?",
+                        [file],
+                    )?;
+                }
+            }
+        }
+        tx.commit()?;
         Ok(())
     }
 
@@ -682,6 +786,14 @@ impl Core {
 }
 
 fn matches_file(path: &Path, key: &str, digest: &str) -> bool {
+    if key.starts_with("fat-created:") {
+        return files::ObservedFile::open(path).is_ok_and(|file| {
+            file.move_key().is_ok_and(|actual| actual == key)
+                && file
+                    .bytes()
+                    .is_ok_and(|bytes| files::digest(&bytes) == digest)
+        });
+    }
     files::read_with_identity(path)
         .is_ok_and(|(actual, bytes)| actual == key && files::digest(&bytes) == digest)
 }
